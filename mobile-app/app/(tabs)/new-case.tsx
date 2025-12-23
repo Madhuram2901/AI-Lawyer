@@ -1,17 +1,68 @@
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert } from "react-native";
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ActivityIndicator } from "react-native";
 import { useState } from "react";
 import { useRouter } from "expo-router";
+import api from "../../services/api";
 
 export default function NewCaseScreen() {
   const [caseText, setCaseText] = useState("");
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const handleAnalyze = () => {
+  const handleAnalyze = async () => {
     if (!caseText.trim()) {
       Alert.alert("Validation Error", "Please enter case details.");
       return;
     }
-    router.push("/results");
+
+    try {
+      setLoading(true);
+      console.log("🔄 Starting case analysis...");
+      console.log("📝 Case text length:", caseText.length);
+
+      const response = await api.post("/case/analyze", {
+        case_text: caseText,
+      });
+
+      console.log("✅ Analysis complete!");
+      console.log("📊 Response:", response.data);
+
+      router.push({
+        pathname: "/results",
+        params: { result: JSON.stringify(response.data) },
+      });
+    } catch (error: any) {
+      console.error("❌ Analysis error:", error);
+
+      const status = error?.response?.status;
+      const detail = error?.response?.data?.detail;
+
+      if (error.code === 'ECONNABORTED') {
+        // Timeout error (very rare with 5 minute timeout)
+        Alert.alert(
+          "Analysis Timeout",
+          "The analysis took longer than 5 minutes. This is unusual. Please check your network connection and try again.",
+          [{ text: "OK" }]
+        );
+      } else if (status === 503) {
+        // AI service unavailable
+        Alert.alert(
+          "AI Service Unavailable",
+          "The AI analysis service is currently offline. Please contact support or try again later.",
+          [{ text: "OK" }]
+        );
+      } else if (detail) {
+        // Server returned error message
+        Alert.alert("Error", detail);
+      } else {
+        // Generic error
+        Alert.alert(
+          "Error",
+          `Unable to analyze case. ${error.message || "Please check your connection and try again."}`,
+        );
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -27,9 +78,19 @@ export default function NewCaseScreen() {
         onChangeText={setCaseText}
       />
 
-      <TouchableOpacity style={styles.button} onPress={handleAnalyze}>
-        <Text style={styles.buttonText}>Analyze Case</Text>
+      <TouchableOpacity style={styles.button} onPress={handleAnalyze} disabled={loading}>
+        {loading ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.buttonText}>Analyze Case</Text>
+        )}
       </TouchableOpacity>
+
+      {loading && (
+        <Text style={styles.loadingText}>
+          🤖 AI is analyzing your case... This may take 30-60 seconds.
+        </Text>
+      )}
     </View>
   );
 }
@@ -67,5 +128,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: "center",
     fontWeight: "600",
+  },
+  loadingText: {
+    color: "#6366f1",
+    fontSize: 14,
+    textAlign: "center",
+    marginTop: 16,
+    fontStyle: "italic",
   },
 });
