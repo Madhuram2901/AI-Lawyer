@@ -1,11 +1,12 @@
 import requests
 import logging
 import json
+import time
 
 logger = logging.getLogger(__name__)
 
-OLLAMA_BASE_URL = "http://localhost:11434"
-DEFAULT_MODEL = "llama3:latest"  # Using llama3 which is installed
+OLLAMA_BASE_URL = "http://127.0.0.1:11434"
+DEFAULT_MODEL = "llama3:latest"  # Using llama3:latest which is more common
 
 
 def is_ollama_available() -> bool:
@@ -26,7 +27,7 @@ def call_ollama(prompt: str, model: str = DEFAULT_MODEL) -> dict:
     
     Args:
         prompt: The prompt to send to Ollama
-        model: The model to use (default: llama2)
+        model: The model to use (default: llama3:latest)
     
     Returns:
         dict: Parsed response from Ollama
@@ -34,6 +35,7 @@ def call_ollama(prompt: str, model: str = DEFAULT_MODEL) -> dict:
     Raises:
         RuntimeError: If the API call fails
     """
+    start_time = time.time()  # Track processing time
     try:
         logger.info(f"Calling Ollama with model: {model}")
         
@@ -43,11 +45,20 @@ def call_ollama(prompt: str, model: str = DEFAULT_MODEL) -> dict:
             "model": model,
             "prompt": prompt,
             "stream": False,
-            "format": "json"  # Request JSON response
+            "format": "json",  # Request JSON response
+            # Performance optimizations
+            "options": {
+                "num_predict": 2048,    # Limit response length for faster processing
+                "temperature": 0.7,      # Balance between creativity and consistency
+                "top_p": 0.9,           # Nucleus sampling for better quality
+                "num_ctx": 4096,        # Context window size
+            }
         }
         
-        # Make the request (increased timeout for complex analysis)
-        response = requests.post(url, json=payload, timeout=180)
+        # Make the request with extended timeout for long case analysis
+        # Increased from 180s to 300s to match mobile app timeout
+        logger.info(f"Sending request to Ollama (timeout: 300s)...")
+        response = requests.post(url, json=payload, timeout=300)
         response.raise_for_status()
         
         # Parse the response
@@ -57,10 +68,12 @@ def call_ollama(prompt: str, model: str = DEFAULT_MODEL) -> dict:
         # Try to parse the response as JSON
         try:
             parsed_response = json.loads(response_text)
-            logger.info("Successfully parsed Ollama response")
+            elapsed_time = time.time() - start_time
+            logger.info(f"Successfully parsed Ollama response (took {elapsed_time:.2f}s)")
             return parsed_response
         except json.JSONDecodeError:
-            logger.warning("Failed to parse Ollama response as JSON, returning raw text")
+            elapsed_time = time.time() - start_time
+            logger.warning(f"Failed to parse Ollama response as JSON (took {elapsed_time:.2f}s), returning raw text")
             return {"raw_response": response_text}
             
     except requests.exceptions.RequestException as e:
