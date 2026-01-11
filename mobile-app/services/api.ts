@@ -1,10 +1,11 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: "http://192.168.29.149:8000/api/v1",
-  timeout: 300000, // 5 minutes - plenty of time for AI analysis
+  baseURL: "https://yellow-laws-agree.loca.lt/api/v1", // New stable tunnel for Gemini/Ollama backend
+  timeout: 300000,
   headers: {
     "Content-Type": "application/json",
+    "Bypass-Tunnel-Reminder": "true", // Required to skip localtunnel welcome page
   },
 });
 
